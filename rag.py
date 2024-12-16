@@ -1,5 +1,6 @@
 import logging
 import ebooklib
+from env_tokens import TELEGRAM_BOT_TOKEN, MISTRAL_API_ENDPOINT, PINECONE_API_KEY
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from mistralai import Mistral
@@ -7,6 +8,7 @@ from pinecone import Pinecone, ServerlessSpec
 from sentence_transformers import SentenceTransformer
 from ebooklib import epub
 from bs4 import BeautifulSoup
+from langchain.text_splitter import CharacterTextSplitter
 import os
 
 # Enable logging
@@ -16,14 +18,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Токен Telegram бота
-TELEGRAM_BOT_TOKEN = '7466857543:AAHWnxfKJ4hpS46zoI48CaRIYMP7aCir4BY'
+TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN
 
 # API endpoint Mistral
-MISTRAL_API_ENDPOINT = 'BbzDhJzmYPuASFVeZC7C6pLuHuC6qb6m'
+MISTRAL_API_ENDPOINT = MISTRAL_API_ENDPOINT
 MISTRAL_MODEL = 'mistral-medium'  # Replace with the name of your Mistral model
 MISTRAL_CLIENT = Mistral(api_key=MISTRAL_API_ENDPOINT)
+
 # API endpoint Pinecone
-PINECONE_API_KEY = 'pcsk_3jKr3Z_SrBc6DCo3JRmssPRaJ6yhRHkK4DK2VmdZyrmwSZu6ypEUuPYhFWyY743QiDadmZ'
+PINECONE_API_KEY = PINECONE_API_KEY
 PINECONE_ENVIRONMENT = 'us-east-1'
 INDEX_NAME = 'multilingual-e5-large'
 
@@ -32,9 +35,16 @@ pc = Pinecone(api_key=PINECONE_API_KEY)
 
 # Initialize SentenceTransformer model
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+# model = SentenceTransformer('intfloat/multilingual-e5-large')
+
+# TODO Сделать БД?
+ind_text = []
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text('Hi! I am your Mistral RAG bot. Send me a message and I will retrieve and generate a response for you.')
+    await update.message.reply_text(
+        'Hi! I am your Mistral RAG bot. Send me a message and I will retrieve and generate a response for you.')
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_message = update.message.text
@@ -48,6 +58,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.message.reply_text(response)
 
+
 def retrieve_documents(query: str):
     # Convert the query to a vector
     query_vector = model.encode(query).tolist()
@@ -55,10 +66,10 @@ def retrieve_documents(query: str):
     # Query the Pinecone index with keyword arguments
     index = pc.Index(INDEX_NAME)
     results = index.query(vector=query_vector, top_k=5, include_metadata=True)
-
+    # print(results)
     # Extract the document IDs and scores
-    retrieved_docs = [{'id': match['id'], 'score': match['score']} for match in results['matches']]
-
+    retrieved_docs = [ind_text[int(match['id'])] for match in results['matches']]
+    # print("docs: ",retrieved_docs)
     return retrieved_docs
 
 
@@ -80,6 +91,7 @@ def generate_response(query: str, documents: list):
         logger.error(f"Error generating response: {e}")
         return "Sorry, I couldn't generate a response at the moment."
 
+
 def extract_text_from_epub(file_path):
     book = epub.read_epub(file_path)
     text = []
@@ -88,6 +100,7 @@ def extract_text_from_epub(file_path):
         text.append(soup.get_text())
     return ' '.join(text)
 
+
 def generate_embeddings(documents):
     embeddings = []
     for doc in documents:
@@ -95,29 +108,40 @@ def generate_embeddings(documents):
         embeddings.append({'id': doc['id'], 'values': embedding.tolist()})
     return embeddings
 
+
 def main() -> None:
     # Extract text from EPUB files and generate embeddings
-    epub_folder = '/home/bullat/projects/rag/data'
+    epub_folder = './data'
     documents = []
     for filename in os.listdir(epub_folder):
         if filename.endswith('.epub'):
             file_path = os.path.join(epub_folder, filename)
             text = extract_text_from_epub(file_path)
-            documents.append({'id': filename, 'text': text})
+            #TODO использовать name для ссылки на источник
+            documents.append({'name': filename, 'text': text})
 
-    embeddings = generate_embeddings(documents)
+    text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=100)
+    texts = []
+    for doc in documents:
+        texts.extend(text_splitter.split_text(doc['text']))
+    for ind, text in enumerate(texts):
+        ind_text.append({'id': str(ind), 'text': text})
+        # texts.extend(text_splitter.split_text(doc['text']))
+    # print(ind_text[0])
 
+    embeddings = generate_embeddings(ind_text)
+    # print(embeddings[0])
     # Create the index if it doesn't exist
     if INDEX_NAME not in pc.list_indexes().names():
-            pc.create_index(
-                name=INDEX_NAME,
-                dimension=len(embeddings[0]['values']),
-                metric='euclidean',
-                spec=ServerlessSpec(
-                    cloud='aws',
-                    region='us-east-1'
-                )
+        pc.create_index(
+            name=INDEX_NAME,
+            dimension=len(embeddings[0]['values']),
+            metric='cosine',
+            spec=ServerlessSpec(
+                cloud='aws',
+                region='us-east-1'
             )
+        )
 
     # Upsert embeddings to the Pinecone index
     index = pc.Index(INDEX_NAME)
@@ -134,6 +158,7 @@ def main() -> None:
 
     # Start the Bot
     application.run_polling()
+
 
 if __name__ == '__main__':
     main()
