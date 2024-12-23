@@ -75,10 +75,17 @@ def retrieve_documents(query: str):
 
 def generate_response(query: str, documents: list):
     """Generate a response using Mistral API."""
-    # Construct the prompt
     prompt = f"""
-        Based on using {documents} answer to the question.
-    """
+    You are an AI assistant designed to help users prepare for ML engineer interviews. 
+    You have access to a knowledge base with information in English. 
+    When a user asks a question, you should retrieve the relevant information from the knowledge base and then translate the response into the language of the user's question.
+    Knowledge base: {documents}
+    
+    Here is the user's question:
+    [{query}]
+    
+    Please provide the answer in the language of the user's question.
+        """
 
     # Send the prompt to Mistral API
     try:
@@ -120,7 +127,7 @@ def main() -> None:
             #TODO использовать name для ссылки на источник
             documents.append({'name': filename, 'text': text})
 
-    text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=100)
+    text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
     texts = []
     for doc in documents:
         texts.extend(text_splitter.split_text(doc['text']))
