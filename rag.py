@@ -1,6 +1,8 @@
 import logging
 import ebooklib
-from env_tokens import TELEGRAM_BOT_TOKEN, MISTRAL_API_ENDPOINT, PINECONE_API_KEY
+import os
+from dotenv import load_dotenv
+# from env_tokens import TELEGRAM_BOT_TOKEN, MISTRAL_API_ENDPOINT, PINECONE_API_KEY
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from mistralai import Mistral
@@ -10,6 +12,12 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 from langchain.text_splitter import CharacterTextSplitter
 import os
+
+load_dotenv()
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+MISTRAL_API_ENDPOINT = os.getenv("MISTRAL_API_ENDPOINT")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 # Enable logging
 logging.basicConfig(
