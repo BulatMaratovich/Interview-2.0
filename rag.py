@@ -1,6 +1,5 @@
 import logging
 import ebooklib
-import os
 from dotenv import load_dotenv
 # from env_tokens import TELEGRAM_BOT_TOKEN, MISTRAL_API_ENDPOINT, PINECONE_API_KEY
 from telegram import Update
@@ -46,7 +45,7 @@ model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 # model = SentenceTransformer('intfloat/multilingual-e5-large')
 
 # TODO Сделать БД?
-ind_text = []
+ind_text_dict = {}
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -75,8 +74,9 @@ def retrieve_documents(query: str):
     index = pc.Index(INDEX_NAME)
     results = index.query(vector=query_vector, top_k=5, include_metadata=True)
     # print(results)
+    # print(ind_text_dict['0'])
     # Extract the document IDs and scores
-    retrieved_docs = [ind_text[int(match['id'])] for match in results['matches']]
+    retrieved_docs = [ind_text_dict[match['id']] for match in results['matches']]
     # print("docs: ",retrieved_docs)
     return retrieved_docs
 
@@ -118,9 +118,9 @@ def extract_text_from_epub(file_path):
 
 def generate_embeddings(documents):
     embeddings = []
-    for doc in documents:
-        embedding = model.encode(doc['text'])
-        embeddings.append({'id': doc['id'], 'values': embedding.tolist()})
+    for text_id, text in documents.items():
+        embedding = model.encode(text)
+        embeddings.append({'id': text_id, 'values': embedding.tolist()})
     return embeddings
 
 
@@ -140,11 +140,11 @@ def main() -> None:
     for doc in documents:
         texts.extend(text_splitter.split_text(doc['text']))
     for ind, text in enumerate(texts):
-        ind_text.append({'id': str(ind), 'text': text})
+        ind_text_dict[str(ind)] = text
         # texts.extend(text_splitter.split_text(doc['text']))
-    # print(ind_text[0])
+    # print(ind_text_dict[0])
 
-    embeddings = generate_embeddings(ind_text)
+    embeddings = generate_embeddings(ind_text_dict)
     # print(embeddings[0])
     # Create the index if it doesn't exist
     if INDEX_NAME not in pc.list_indexes().names():
