@@ -1,7 +1,6 @@
 import logging
 import ebooklib
 from dotenv import load_dotenv
-# from env_tokens import TELEGRAM_BOT_TOKEN, MISTRAL_API_ENDPOINT, PINECONE_API_KEY
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from mistralai import Mistral
@@ -44,7 +43,6 @@ pc = Pinecone(api_key=PINECONE_API_KEY)
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 # model = SentenceTransformer('intfloat/multilingual-e5-large')
 
-# TODO Сделать БД?
 ind_text_dict = {}
 
 
@@ -73,7 +71,7 @@ def retrieve_documents(query: str):
     # Query the Pinecone index with keyword arguments
     index = pc.Index(INDEX_NAME)
     results = index.query(vector=query_vector, top_k=5, include_metadata=True)
-    
+
     # Log the retrieved results for debugging
     logger.info(f"Retrieved results: {results}")
 
@@ -84,7 +82,7 @@ def retrieve_documents(query: str):
             retrieved_docs.append(ind_text_dict[doc_id])
         except KeyError:
             logger.warning(f"Document ID {doc_id} not found in local dictionary.")
-    
+
     return retrieved_docs
 
 
@@ -93,7 +91,8 @@ def generate_response(query: str, documents: list):
     prompt = f"""
     You are an AI assistant designed to help users prepare for ML engineer interviews. 
     You have access to a knowledge base with information in English. 
-    When a user asks a question, you should retrieve the relevant information from the knowledge base and then translate the response into the russian language.
+    When a user asks a question, you should retrieve the relevant information from the knowledge base 
+    and then translate the response into the russian language.
     Knowledge base: {documents}
     
     Here is the user's question:
@@ -139,7 +138,6 @@ def main() -> None:
         if filename.endswith('.epub'):
             file_path = os.path.join(epub_folder, filename)
             text = extract_text_from_epub(file_path)
-            #TODO использовать name для ссылки на источник
             documents.append({'name': filename, 'text': text})
 
     text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
@@ -147,7 +145,7 @@ def main() -> None:
     for doc in documents:
         chunks = text_splitter.split_text(doc['text'])
         for chunk in chunks:
-            text_id = f"{doc['name']}_{chunks.index(chunk)}" 
+            text_id = f"{doc['name']}_{chunks.index(chunk)}"
             ind_text_dict[text_id] = chunk
         # texts.extend(text_splitter.split_text(doc['text']))
     # print(ind_text_dict[0])
