@@ -35,7 +35,7 @@ MISTRAL_CLIENT = Mistral(api_key=MISTRAL_API_ENDPOINT)
 # API endpoint Pinecone
 PINECONE_API_KEY = PINECONE_API_KEY
 PINECONE_ENVIRONMENT = 'us-east-1'
-INDEX_NAME = 'multilingual-e5-large'
+INDEX_NAME = 'interview-qa2'
 
 # Initialize Pinecone
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -73,11 +73,18 @@ def retrieve_documents(query: str):
     # Query the Pinecone index with keyword arguments
     index = pc.Index(INDEX_NAME)
     results = index.query(vector=query_vector, top_k=5, include_metadata=True)
-    # print(results)
-    # print(ind_text_dict['0'])
-    # Extract the document IDs and scores
-    retrieved_docs = [ind_text_dict[match['id']] for match in results['matches']]
-    # print("docs: ",retrieved_docs)
+    
+    # Log the retrieved results for debugging
+    logger.info(f"Retrieved results: {results}")
+
+    retrieved_docs = []
+    for match in results['matches']:
+        doc_id = match['id']
+        try:
+            retrieved_docs.append(ind_text_dict[doc_id])
+        except KeyError:
+            logger.warning(f"Document ID {doc_id} not found in local dictionary.")
+    
     return retrieved_docs
 
 
@@ -86,13 +93,13 @@ def generate_response(query: str, documents: list):
     prompt = f"""
     You are an AI assistant designed to help users prepare for ML engineer interviews. 
     You have access to a knowledge base with information in English. 
-    When a user asks a question, you should retrieve the relevant information from the knowledge base and then translate the response into the language of the user's question.
+    When a user asks a question, you should retrieve the relevant information from the knowledge base and then translate the response into the russian language.
     Knowledge base: {documents}
     
     Here is the user's question:
     [{query}]
     
-    Please provide the answer in the language of the user's question.
+    Please provide the answer only in the russian language.
         """
 
     # Send the prompt to Mistral API
@@ -138,9 +145,10 @@ def main() -> None:
     text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
     texts = []
     for doc in documents:
-        texts.extend(text_splitter.split_text(doc['text']))
-    for ind, text in enumerate(texts):
-        ind_text_dict[str(ind)] = text
+        chunks = text_splitter.split_text(doc['text'])
+        for chunk in chunks:
+            text_id = f"{doc['name']}_{chunks.index(chunk)}" 
+            ind_text_dict[text_id] = chunk
         # texts.extend(text_splitter.split_text(doc['text']))
     # print(ind_text_dict[0])
 
