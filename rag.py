@@ -92,15 +92,15 @@ def generate_response(query: str, documents: list):
     You are an AI assistant designed to help users prepare for ML engineer interviews. 
     You have access to a knowledge base with information in English. 
     When a user asks a question, you should retrieve the relevant information from the knowledge base 
-    and then translate the response into the russian language.
+    and then answer the response on the language of the user's question.
     Knowledge base: {documents}
     
     Here is the user's question:
     [{query}]
     
-    Please provide the answer only in the russian language.
+    Please, write the answer only in the language of the user's question.
         """
-
+    # Please provide the answer only in the russian language.
     # Send the prompt to Mistral API
     try:
         response = MISTRAL_CLIENT.chat.complete(
